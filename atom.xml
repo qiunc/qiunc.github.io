@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://qiunc.github.io/</id>
     <title>宁聪</title>
-    <updated>2021-07-14T06:20:02.464Z</updated>
+    <updated>2021-07-15T06:32:17.818Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://qiunc.github.io/"/>
     <link rel="self" href="https://qiunc.github.io/atom.xml"/>
@@ -10,6 +10,122 @@
     <logo>https://qiunc.github.io/images/avatar.png</logo>
     <icon>https://qiunc.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, 宁聪</rights>
+    <entry>
+        <title type="html"><![CDATA[单例模式]]></title>
+        <id>https://qiunc.github.io/post/dan-li-mo-shi/</id>
+        <link href="https://qiunc.github.io/post/dan-li-mo-shi/">
+        </link>
+        <updated>2021-07-14T06:28:47.000Z</updated>
+        <content type="html"><![CDATA[<p>首先举个用静态内部类实现单例的例子，看代码：</p>
+<pre><code class="language-java">public class Singleton {
+
+    private Singleton() {
+    }
+
+    public static Singleton getInstance(){
+        return SingletonHolder.INSTANCE;
+    }
+    private static class SingletonHolder{
+        private static final Singleton INSTANCE = new Singleton();
+    }
+}
+</code></pre>
+<p>用静态内部列实现单例模式，既能保证<strong>延迟加载</strong>，又能保证<strong>线程安全</strong>，只创建一个实例对象。那么其中原理又是什么呢？</p>
+<h4 id="延迟加载">延迟加载</h4>
+<p>关于延迟加载的正确性，可通过以下代码验证：</p>
+<pre><code class="language-java">public class Outer {
+    private Outer() {
+        System.out.println(&quot;outer instance create&quot;);
+    }
+
+    static {
+        System.out.println(&quot;outer init&quot;);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(&quot;outer main execute&quot;);
+       //        Outer outer = Inner.outer;
+    }
+
+    private static class Inner {
+        static {
+            System.out.println(&quot;inner init&quot;);
+        }
+
+        private static final Outer outer = new Outer();
+    }
+}
+</code></pre>
+<p>运行以上代码，输出结果为：</p>
+<blockquote>
+<p>outer init<br>
+outer main execute</p>
+</blockquote>
+<p>当把 <code>Outer outer = Inner.outer;</code> 这一行取消注释后，输出结果为</p>
+<blockquote>
+<p>outer init<br>
+outer main execute<br>
+inner init<br>
+outer instance create</p>
+</blockquote>
+<p>通过对比可以发现，只有当访问 Inner 类的静态对象的时候，才对该类进行了初始化。根据此结果我们提出两个问题并试图解决：</p>
+<blockquote>
+<p>Q1: 为什么是先执行 静态代码块，后执行 main 方法？<br>
+Q2: 为什么直到访问 <code>Inner.outer</code>时才触发 Inner 类的初始化？</p>
+</blockquote>
+<h5 id="类加载的时机">类加载的时机</h5>
+<p>类从被加载到虚拟机内存中开始，到卸载出内存为止，整个生命周期包括：加载、验证、准备、解析、初始化、使用、卸载 7 个阶段。</p>
+<figure data-type="image" tabindex="1"><img src="https://qiunc.github.io//post-images/1626244145162.png" alt="" loading="lazy"></figure>
+<p>其中，类的加载过程包括：加载、验证、准备、解析、初始化。下面说一下这几个阶段都做了什么：</p>
+<ul>
+<li><strong>加载</strong>：在这个阶段虚拟机需要完成三件事：<br>
+1、通过一个类的全限定名来获取定义此类的二进制字节流。<br>
+2、将这个字节流代表的静态存储结构转化为方法区的运行时数据结构。<br>
+3、在内存中生成一个代表这个类的 java.lang.Class 对象，作为方法区这个类的各种数据的访问入口。</li>
+<li><strong>验证</strong>：这阶段的目的是为了确保 Class 文件的字节流中包含的信息符合当前虚拟机的要求，并且不会危害虚拟机自身的安全。</li>
+<li><strong>准备</strong>：此阶段是正式为类变量分配内存并设置类变量初始值的阶段，这些变量使用的内存都将在方法区中分配。如，int 类型的默认值为 0 ，布尔类型的默认值为 false，非基本类型的初始值为 null 。</li>
+<li><strong>解析</strong>：此阶段是虚拟机将常量池的符号引用替换为直接引用的过程。</li>
+<li><strong>初始化</strong>：初始化阶段即 执行类的 clinit() 方法的阶段（clinit = class + initialize，意为类的初始化），包括为类的静态变量赋初始值和执行静态代码块中的内容，执行的先后顺序取决于在源文件中出现的顺序。</li>
+</ul>
+<p>要执行一个类的方法，需要先完成该类的初始化，从类生命周期中看出，静态代码块执行时间在初始化阶段，调用 main 方法在 使用阶段，故 Q1 回答完毕。</p>
+<p>在类的加载阶段，加载、验证、准备、初始化是按照顺序严格执行的。但是 Java 虚拟机规范并没有规定什么情况下执行类加载的第一个阶段：加载，这一点可以交给虚拟机的具体实现自由把握。</p>
+<p>可以但是对于初始化阶段，虚拟机规范严格规定： <strong>有且只有 5 种情况</strong> 必须立即对类尽心初始化（加载、验证、准备自然需要在之前执行）：</p>
+<blockquote>
+<p>1） 遇到 new 、getstatic、putstatic 或者 invokestatic 这 4 条字节码指令时，如果没有对类进行初始化，则需要先触发其初始化。这4个指令对应的 Java 场景是：使用 new 新建一个 Java 对象，访问或者设置一个类的静态字段，访问一个类的静态方法的时候。<br>
+2）使用 java.lang.reflect 包的方法对类进行反射调用的时候，如果类没有进行初始化，则需要先触发其初始化。<br>
+3）当初始化一个类的时候，如果发现其父类还没有进行过初始化，则需要先触发其父类的初始化。<br>
+4）当虚拟机启动的时候，用户需要指定一个需要执行的主类（包含 main 方法的那个类），虚拟机会先初始化这个类。<br>
+5）当使用 JDK 1.7 的动态语言支持时，如果一个 java.lang.invoke.MethodHandle 实例最后的解析结果 REF_getStatic、REF_putStatic、REF_invokeStatic 的方法句柄，并且这个方法句柄对应的类没有进行过初始化，则需要先触发其初始化。</p>
+</blockquote>
+<p>故 静态内部类 实现单例模式，是因为触发了第一种情况的 getstatic 方法，即访问该类的静态成员变量，这个时候才触发了 Inner 类的初始化，至此 Q2 回答完毕。</p>
+<h4 id="线程安全">线程安全</h4>
+<p>虚拟机会保证一个类的  clinit() 方法在多线程环境中被正确的加锁、同步，如果多个线程同事去初始化一个类，那么只有一个线程去执行这个类的 clinit() 方法，其他线程都需要阻塞等待，直到活动线程执行 clinit() 方法执行完毕。如果在一个类的clinit() 方法中有耗时很长的操作，就可能导致多个线程阻塞，在实际应用中这种阻塞往往是很隐蔽的。<br>
+举例验证一下：</p>
+<pre><code class="language-java">public class Test {
+    static Outer out1;
+    static Outer out2;
+    public static void main(String[] args) {
+        //此处为了简洁，只用了两个子线程创建对象，实际测试时应增大数量级
+        new Thread(()-&gt; out1 = Outer.getInstance()).start();
+        new Thread(()-&gt; out2 = Outer.getInstance()).start();
+        try {
+            Thread.sleep(2000);//延迟两秒，让子线程有充足的时间创建对象.
+            System.out.println(out1 == out2);
+        } catch(InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+</code></pre>
+<p>运行该段代码，输出结果为</p>
+<blockquote>
+<p>outer instance create<br>
+true</p>
+</blockquote>
+<p>即 在不同线程去获取 Outer 的实例对象，获得的是同一个对象，因为两个变量都指向同一内存地址，该类的构造函数仅被调用一次。在加载 Inner 类的初始化阶段，实例化了 Outer 类的实例。<br>
+一句话总结：<strong>虚拟机保证了线程安全和只创建一个实例</strong>。</p>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Hello Gridea]]></title>
         <id>https://qiunc.github.io/post/hello-gridea/</id>
